@@ -50,23 +50,46 @@ def main():
         st.write(f"- `{demand_col}`: Annual demand/usage")
         st.write(f"- `{cost_col}`: Unit cost")
         
-        uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+        col1, col2 = st.columns(2)
+        with col1:
+            uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+        with col2:
+            # Button to load example file
+            if st.button("Load Example Input File"):
+                # Use the example file path
+                example_file_path = "example/sku_historical_data.csv"
+                try:
+                    # First try with comma separator (default)
+                    df = pd.read_csv(example_file_path)
+                    # Check if we need to use semicolon separator
+                    if len(df.columns) == 1 and ';' in df.columns[0]:
+                        # Try with semicolon separator
+                        df = pd.read_csv(example_file_path, sep=';')
+                        st.success(f"Loaded example file with semicolon separator: {example_file_path}")
+                    else:
+                        st.success(f"Loaded example file: {example_file_path}")
+                    # Set uploaded_file to a special value to indicate example file is loaded
+                    uploaded_file = "EXAMPLE_FILE_LOADED"
+                except Exception as e:
+                    st.error(f"Error loading example file: {str(e)}")
         
-        # Only show the rest of the options if a file is uploaded
+        # Only show the rest of the options if a file is uploaded or example file is loaded
         if uploaded_file is not None:
-            # Try reading with different separators
-            try:
-                # First try with comma separator (default)
-                df = pd.read_csv(uploaded_file)
-                if len(df.columns) == 1 and ';' in df.columns[0]:
-                    # If we only have one column and it contains semicolons, try with semicolon separator
-                    uploaded_file.seek(0)  # Reset file pointer
-                    df = pd.read_csv(uploaded_file, sep=';')
-                    st.success("Detected semicolon-separated CSV file")
-            except Exception as e:
-                st.error(f"Error reading CSV file: {str(e)}")
-                st.info("Try uploading a CSV file with comma or semicolon separators")
-                df = None
+            # If example file is already loaded, skip this section
+            if uploaded_file != "EXAMPLE_FILE_LOADED":
+                # Try reading with different separators
+                try:
+                    # First try with comma separator (default)
+                    df = pd.read_csv(uploaded_file)
+                    if len(df.columns) == 1 and ';' in df.columns[0]:
+                        # If we only have one column and it contains semicolons, try with semicolon separator
+                        uploaded_file.seek(0)  # Reset file pointer
+                        df = pd.read_csv(uploaded_file, sep=';')
+                        st.success("Detected semicolon-separated CSV file")
+                except Exception as e:
+                    st.error(f"Error reading CSV file: {str(e)}")
+                    st.info("Try uploading a CSV file with comma or semicolon separators")
+                    df = None
             
             if df is not None:
                 # Debug: Show actual column names
@@ -109,7 +132,7 @@ def main():
                     run_analysis = st.button("Run ABC Analysis")
     
     # Main content area
-    if uploaded_file is not None and df is not None:
+    if (uploaded_file is not None or uploaded_file == "EXAMPLE_FILE_LOADED") and df is not None:
         st.write("### Data Preview")
         st.dataframe(df.head())
         
@@ -150,8 +173,9 @@ def main():
                 
                 # Display charts
                 st.write("### Pareto Analysis")
-                fig, ax = plt.subplots(figsize=(10, 6))
+                fig, ax = plt.subplots(figsize=(7, 4))  # Optimal size for Pareto chart visualization
                 abc_slotter.plot_pareto_chart(ax)
+                plt.tight_layout()  # Adjust padding to eliminate empty space
                 st.pyplot(fig)
                 
                 # Display summary statistics

@@ -36,8 +36,7 @@ def main():
     cost_col = "unit_cost"
     
     # Initialize variables
-    df = st.session_state.get('df', None)
-    uploaded_file = st.session_state.get('uploaded_file', None)
+    df = None
     run_analysis = False
     result_df = None
     
@@ -52,12 +51,7 @@ def main():
         st.write(f"- `{cost_col}`: Unit cost")
         
         # File uploader for CSV files
-        file_upload = st.file_uploader("Choose a CSV file", type=["csv"])
-        
-        # Update session state if a file is uploaded
-        if file_upload is not None:
-            uploaded_file = file_upload
-            st.session_state['uploaded_file'] = file_upload
+        uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
         
         # Button to load example file (now below the file uploader)
         if st.button("Load Example Input File", use_container_width=True):
@@ -74,25 +68,15 @@ def main():
                 else:
                     st.success(f"Loaded example file: {example_file_path}")
                 
-                # Normalize column names for the example file
-                df.columns = [col.lower().strip() for col in df.columns]
-                
                 # Set uploaded_file to a special value to indicate example file is loaded
                 uploaded_file = "EXAMPLE_FILE_LOADED"
-                
-                # Store the dataframe in session state so it persists across reruns
-                st.session_state['df'] = df
-                st.session_state['uploaded_file'] = uploaded_file
-                
-                # Force a rerun to show parameters immediately
-                st.experimental_rerun()
             except Exception as e:
                 st.error(f"Error loading example file: {str(e)}")
         
         # Only show the rest of the options if a file is uploaded or example file is loaded
         if uploaded_file is not None:
             # If example file is already loaded, skip this section
-            if uploaded_file != "EXAMPLE_FILE_LOADED" and df is None:
+            if uploaded_file != "EXAMPLE_FILE_LOADED":
                 # Try reading with different separators
                 try:
                     # First try with comma separator (default)
@@ -102,14 +86,10 @@ def main():
                         uploaded_file.seek(0)  # Reset file pointer
                         df = pd.read_csv(uploaded_file, sep=';')
                         st.success("Detected semicolon-separated CSV file")
-                    
-                    # Store dataframe in session state
-                    st.session_state['df'] = df
                 except Exception as e:
                     st.error(f"Error reading CSV file: {str(e)}")
                     st.info("Try uploading a CSV file with comma or semicolon separators")
                     df = None
-                    st.session_state['df'] = None
             
             if df is not None:
                 # Debug: Show actual column names

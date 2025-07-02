@@ -50,28 +50,27 @@ def main():
         st.write(f"- `{demand_col}`: Annual demand/usage")
         st.write(f"- `{cost_col}`: Unit cost")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
-        with col2:
-            # Button to load example file
-            if st.button("Load Example Input File"):
-                # Use the example file path
-                example_file_path = "example/sku_historical_data.csv"
-                try:
-                    # First try with comma separator (default)
-                    df = pd.read_csv(example_file_path)
-                    # Check if we need to use semicolon separator
-                    if len(df.columns) == 1 and ';' in df.columns[0]:
-                        # Try with semicolon separator
-                        df = pd.read_csv(example_file_path, sep=';')
-                        st.success(f"Loaded example file with semicolon separator: {example_file_path}")
-                    else:
-                        st.success(f"Loaded example file: {example_file_path}")
-                    # Set uploaded_file to a special value to indicate example file is loaded
-                    uploaded_file = "EXAMPLE_FILE_LOADED"
-                except Exception as e:
-                    st.error(f"Error loading example file: {str(e)}")
+        # File uploader for CSV files
+        uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+        
+        # Button to load example file (now below the file uploader)
+        if st.button("Load Example Input File"):
+            # Use the example file path
+            example_file_path = "example/sku_historical_data.csv"
+            try:
+                # First try with comma separator (default)
+                df = pd.read_csv(example_file_path)
+                # Check if we need to use semicolon separator
+                if len(df.columns) == 1 and ';' in df.columns[0]:
+                    # Try with semicolon separator
+                    df = pd.read_csv(example_file_path, sep=';')
+                    st.success(f"Loaded example file with semicolon separator: {example_file_path}")
+                else:
+                    st.success(f"Loaded example file: {example_file_path}")
+                # Set uploaded_file to a special value to indicate example file is loaded
+                uploaded_file = "EXAMPLE_FILE_LOADED"
+            except Exception as e:
+                st.error(f"Error loading example file: {str(e)}")
         
         # Only show the rest of the options if a file is uploaded or example file is loaded
         if uploaded_file is not None:

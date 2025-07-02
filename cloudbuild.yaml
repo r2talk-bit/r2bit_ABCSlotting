@@ -1,0 +1,27 @@
+steps:
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'gcr.io/wa-agent/r2bitabcslotting:latest', '.']
+
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/wa-agent/r2bitabcslotting:latest']
+
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+  - 'run'
+  - 'deploy'
+  - 'r2bitabcslotting'
+  - '--image'
+  - 'gcr.io/wa-agent/r2bitabcslotting:latest'
+  - '--region'
+  - 'us-central1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated'
+
+# Store images
+images:
+- 'gcr.io/wa-agent/r2bitabcslotting:latest'

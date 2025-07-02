@@ -1,0 +1,47 @@
+# Virtual Environment
+venv/
+env/
+.env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Batch files
+*.bat
+run.bat
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
+
+# Local development settings
+.env
+.env.local
+
+# Docker
+.dockerignore
+
+# System files
+.DS_Store
+Thumbs.db

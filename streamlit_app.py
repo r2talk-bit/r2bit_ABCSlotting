@@ -50,93 +50,190 @@ def main():
         st.write(f"- `{demand_col}`: Annual demand/usage")
         st.write(f"- `{cost_col}`: Unit cost")
         
-        # File uploader for CSV files
-        uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+        # Create columns for file upload options
+        col1, col2 = st.columns(2)
         
-        # Button to load example file (now below the file uploader)
-        if st.button("Load Example Input File", use_container_width=True):
-            # Use the example file path
-            example_file_path = "example/sku_historical_data.csv"
-            try:
-                # First try with comma separator (default)
-                df = pd.read_csv(example_file_path)
-                # Check if we need to use semicolon separator
-                if len(df.columns) == 1 and ';' in df.columns[0]:
-                    # Try with semicolon separator
-                    df = pd.read_csv(example_file_path, sep=';')
-                    st.success(f"Loaded example file with semicolon separator: {example_file_path}")
-                else:
-                    st.success(f"Loaded example file: {example_file_path}")
-                
-                # Set uploaded_file to a special value to indicate example file is loaded
-                uploaded_file = "EXAMPLE_FILE_LOADED"
-            except Exception as e:
-                st.error(f"Error loading example file: {str(e)}")
+        # File uploader in first column
+        with col1:
+            uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
         
-        # Only show the rest of the options if a file is uploaded or example file is loaded
-        if uploaded_file is not None:
-            # If example file is already loaded, skip this section
-            if uploaded_file != "EXAMPLE_FILE_LOADED":
-                # Try reading with different separators
-                try:
-                    # First try with comma separator (default)
-                    df = pd.read_csv(uploaded_file)
-                    if len(df.columns) == 1 and ';' in df.columns[0]:
-                        # If we only have one column and it contains semicolons, try with semicolon separator
-                        uploaded_file.seek(0)  # Reset file pointer
-                        df = pd.read_csv(uploaded_file, sep=';')
-                        st.success("Detected semicolon-separated CSV file")
-                except Exception as e:
-                    st.error(f"Error reading CSV file: {str(e)}")
-                    st.info("Try uploading a CSV file with comma or semicolon separators")
-                    df = None
+        # Example file button in second column
+        with col2:
+            load_example = st.button("📋 Load Example File", use_container_width=True, help="Load a pre-configured example file to test the application")
+        
+        # Handle example file loading
+        if load_example:
+            import os
+            # Get the absolute path to the example file
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            example_file_path = os.path.join(current_dir, "example", "sku_historical_data.csv")
             
-            if df is not None:
-                # Debug: Show actual column names
-                st.write("### Debug: Actual columns in your CSV file")
-                st.write(f"Column names: {list(df.columns)}")
+            try:
+                # Load the example file with semicolon separator
+                df = pd.read_csv(example_file_path, sep=';')
                 
-                # Check if required columns exist (case-insensitive)
-                df.columns = [col.lower().strip() for col in df.columns]  # Normalize column names
-                item_col_lower = item_col.lower()
-                demand_col_lower = demand_col.lower()
-                cost_col_lower = cost_col.lower()
+                # Normalize column names immediately
+                df.columns = [col.lower().strip() for col in df.columns]
                 
-                missing_cols = [col for col in [item_col_lower, demand_col_lower, cost_col_lower] if col not in df.columns]
+                # Set session state to indicate example file is loaded
+                st.session_state['example_loaded'] = True
+                st.session_state['df'] = df
                 
-                if missing_cols:
-                    st.error(f"Missing required columns: {', '.join(missing_cols)}")
-                    st.write("Please ensure your CSV has these columns (case-insensitive).")
-                else:
-                    st.write("### ABC Classification Parameters")
-                    a_cutoff = st.slider("Class A cutoff (%)", 0, 100, 80)
-                    b_cutoff = st.slider("Class B cutoff (%)", 0, 100, 95)
-                    
-                    # Warehouse location configuration in sidebar
-                    st.write("### Warehouse Configuration")
-                    st.write("Configure warehouse locations in format d.aa.bb.ll.pp:")
-                    
-                    # Warehouse dimensions
-                    deposit = st.number_input("Number of deposits", min_value=1, max_value=9, value=1)
-                    alleys = st.number_input("Number of alleys per deposit", min_value=1, max_value=99, value=10)
-                    blocks = st.number_input("Number of blocks per alley", min_value=1, max_value=99, value=10)
-                    levels = st.number_input("Number of levels per block", min_value=1, max_value=99, value=4)
-                    positions = st.number_input("Number of positions per level", min_value=1, max_value=99, value=10)
-                    
-                    # ABC slotting strategy
-                    st.write("### ABC Slotting Strategy")
-                    a_alleys = st.multiselect("A-class alleys", options=list(range(1, int(alleys)+1)), default=[1, 2])
-                    b_alleys = st.multiselect("B-class alleys", options=list(range(1, int(alleys)+1)), default=[3, 4, 5])
-                    c_alleys = st.multiselect("C-class alleys", options=list(range(1, int(alleys)+1)), default=list(range(6, int(alleys)+1)))
-                    
-                    run_analysis = st.button("Run ABC Analysis")
-    
-    # Main content area
-    if (uploaded_file is not None or uploaded_file == "EXAMPLE_FILE_LOADED") and df is not None:
-        st.write("### Data Preview")
-        st.dataframe(df.head())
+                st.success("✅ Example file loaded successfully!")
+                
+                # Clear the uploaded_file to avoid confusion
+                uploaded_file = None
+                
+            except Exception as e:
+                st.error(f"❌ Error loading example file: {str(e)}")
+                st.info(f"Attempted to load from: {example_file_path}")
+                # Reset session state
+                if 'example_loaded' in st.session_state:
+                    del st.session_state['example_loaded']
+                if 'df' in st.session_state:
+                    del st.session_state['df']
         
-        if run_analysis:
+        # Initialize variables for analysis parameters
+        a_cutoff = 80
+        b_cutoff = 95
+        deposit = 1
+        alleys = 10
+        blocks = 10
+        levels = 4
+        positions = 10
+        a_alleys = [1, 2]
+        b_alleys = [3, 4, 5]
+        c_alleys = list(range(6, 11))
+        run_analysis = False
+        
+        # Get dataframe either from uploaded file or session state
+        if uploaded_file is not None:
+            try:
+                # First check if file is empty
+                file_content = uploaded_file.getvalue().decode('utf-8', errors='replace').strip()
+                if not file_content:
+                    st.error("❌ Error: The uploaded file is empty.")
+                    df = None
+                else:
+                    # Reset the file pointer to the beginning
+                    uploaded_file.seek(0)
+                    
+                    # Try multiple delimiters
+                    delimiters = [',', ';', '\t', '|']
+                    df = None
+                    error_messages = []
+                    
+                    for delimiter in delimiters:
+                        try:
+                            # Try with current delimiter
+                            uploaded_file.seek(0)  # Reset file pointer
+                            temp_df = pd.read_csv(uploaded_file, sep=delimiter, engine='python')
+                            
+                            # Check if we got more than one column
+                            if len(temp_df.columns) > 1:
+                                df = temp_df
+                                st.success(f"✅ File loaded successfully with '{delimiter}' delimiter")
+                                break
+                            else:
+                                error_messages.append(f"Only found 1 column with '{delimiter}' delimiter")
+                        except Exception as e:
+                            error_messages.append(f"Failed with '{delimiter}' delimiter: {str(e)}")
+                    
+                    # If all delimiters failed
+                    if df is None:
+                        # Try one more time with automatic delimiter detection
+                        try:
+                            uploaded_file.seek(0)  # Reset file pointer
+                            df = pd.read_csv(uploaded_file, sep=None, engine='python')  # Let Python engine detect the separator
+                            st.success("✅ File loaded successfully with auto-detected delimiter")
+                        except Exception as e:
+                            # If all attempts failed, show detailed error
+                            error_detail = "\n".join(error_messages)
+                            st.error(f"❌ Error: Could not parse the CSV file. Please check the file format.\n\nDetails:\n{error_detail}")
+                            
+                            # Show a preview of the file content to help diagnose
+                            st.error("File preview (first 200 characters):\n" + file_content[:200])
+                            df = None
+                
+                # If we successfully loaded the dataframe
+                if df is not None:
+                    # Normalize column names to lowercase
+                    df.columns = [col.lower().strip() for col in df.columns]
+                    
+                    # Store in session state
+                    st.session_state['df'] = df
+                    st.session_state['example_loaded'] = False
+                    
+                    # Show a preview of the loaded data
+                    st.write("Preview of loaded data:")
+                    st.dataframe(df.head(3))
+                    
+            except Exception as e:
+                st.error(f"❌ Error: Unexpected error while processing file: {str(e)}")
+                df = None
+        elif 'example_loaded' in st.session_state and st.session_state['example_loaded'] and 'df' in st.session_state:
+            # Use the dataframe from session state if example was loaded
+            df = st.session_state['df']
+        else:
+            df = None
+            
+        # If we have a valid dataframe, show analysis options
+        if df is not None:
+            # Convert column names to lowercase for case-insensitive matching
+            item_col_lower = item_col.lower()
+            demand_col_lower = demand_col.lower()
+            cost_col_lower = cost_col.lower()
+            
+            # Check for required columns
+            missing_cols = [col for col in [item_col_lower, demand_col_lower, cost_col_lower] if col not in df.columns]
+            
+            if missing_cols:
+                st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+                st.write("Please ensure your CSV has these columns (case-insensitive).")
+            else:
+                # Show data preview
+                st.write("### Data Preview")
+                st.dataframe(df.head())
+                
+                # Analysis parameters section
+                st.write("### ABC Classification Parameters")
+                a_cutoff = st.slider("Class A cutoff (%)", 0, 100, 80)
+                b_cutoff = st.slider("Class B cutoff (%)", 0, 100, 95)
+                
+                # Warehouse location configuration
+                st.write("### Warehouse Configuration")
+                st.write("Configure warehouse locations in format d.aa.bb.ll.pp:")
+                
+                # Warehouse dimensions
+                deposit = st.number_input("Number of deposits", min_value=1, max_value=9, value=1)
+                alleys = st.number_input("Number of alleys per deposit", min_value=1, max_value=99, value=10)
+                blocks = st.number_input("Number of blocks per alley", min_value=1, max_value=99, value=10)
+                levels = st.number_input("Number of levels per block", min_value=1, max_value=99, value=4)
+                positions = st.number_input("Number of positions per level", min_value=1, max_value=99, value=10)
+                
+                # ABC slotting strategy
+                st.write("### ABC Slotting Strategy")
+                a_alleys = st.multiselect("A-class alleys", options=list(range(1, int(alleys)+1)), default=[1, 2])
+                b_alleys = st.multiselect("B-class alleys", options=list(range(1, int(alleys)+1)), default=[3, 4, 5])
+                c_alleys = st.multiselect("C-class alleys", options=list(range(1, int(alleys)+1)), default=list(range(6, int(alleys)+1)))
+                
+                # Create a blue button using Streamlit's native functionality
+                # First add the CSS to make the button blue
+                st.markdown("""
+                <style>
+                div.stButton > button:first-child {
+                    background-color: blue;
+                    color: white;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Then create the button
+                run_analysis = st.button("▶️ Run ABC Analysis", use_container_width=True)
+    
+    # Main analysis section - we've already handled the data preview in the sidebar
+    # Only process if run_analysis is True and we have a valid dataframe
+    if run_analysis and df is not None:
             # Convert demand and cost columns to numeric
             try:
                 # Make a copy of the dataframe to avoid modifying the original

@@ -6,10 +6,21 @@ import seaborn as sns
 from utils.abc_slotting import ABCSlotter
 
 def main():
+    """
+    Main function to run the Streamlit application for ABC Inventory Slotting Analysis.
+
+    This function sets up the user interface, handles file uploads, collects user parameters,
+    runs the ABC analysis, and displays the results including dataframes, charts, and
+    warehouse location assignments.
+    """
+    # Set the page configuration for a wide layout to make better use of the screen
     st.set_page_config(layout="wide")
+    
+    # --- Page Title and Instructions ---
     st.title("ABC Inventory Slotting Analysis")
     
-    # Instructions immediately below the title
+    # Display detailed instructions on how to use the tool and what ABC analysis is.
+    # This helps users understand the purpose and functionality of the application.
     st.header("Instructions")
     st.write("""
     ### How to use this tool:
@@ -30,70 +41,80 @@ def main():
     This analysis helps optimize inventory management and warehouse slotting.
     """)
     
-    # Predefined column names
+    # --- Configuration: Predefined Column Names ---
+    # These are the expected column names in the input CSV file.
+    # Using variables for these makes the code easier to maintain.
     item_col = "item_id"
     demand_col = "annual_demand"
     cost_col = "unit_cost"
     
-    # Initialize variables
-    df = None
-    run_analysis = False
-    result_df = None
+    # --- State Initialization ---
+    # Initialize session state variables to hold data and control flow across reruns.
+    df = None  # Will hold the uploaded or example DataFrame.
+    run_analysis = False  # Flag to trigger the analysis when the user clicks the button.
+    result_df = None  # Will hold the DataFrame with analysis results.
     
-    # Sidebar for file upload and parameters
+    # --- Sidebar for User Inputs ---
+    # The sidebar is used for all user configurations to keep the main area clean for results.
     with st.sidebar:
         st.header("Upload and Configure")
         
-        st.write("### Upload your inventory data")
-        st.write("Your CSV file should contain the following columns:")
-        st.write(f"- `{item_col}`: Item identifier")
-        st.write(f"- `{demand_col}`: Annual demand/usage")
-        st.write(f"- `{cost_col}`: Unit cost")
+        st.write("### 1. Upload Your Inventory Data")
+        st.write("Your CSV file must contain the following columns (case-insensitive):")
+        st.write(f"- `{item_col}`: A unique identifier for each item.")
+        st.write(f"- `{demand_col}`: The total demand for the item over a year.")
+        st.write(f"- `{cost_col}`: The cost of a single unit of the item.")
         
-        # Create columns for file upload options
+        # Use columns to place the file uploader and example button side-by-side for a cleaner UI.
         col1, col2 = st.columns(2)
         
-        # File uploader in first column
+        # The file uploader widget allows users to select a CSV file from their local machine.
         with col1:
             uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
         
-        # Example file button in second column
+        # The example file button provides a way for users to test the app without their own data.
         with col2:
             load_example = st.button("📋 Load Example File", use_container_width=True, help="Load a pre-configured example file to test the application")
         
-        # Handle example file loading
+        # --- Logic for Loading Data ---
+        # This block handles the logic for loading the example file if the button is clicked.
         if load_example:
             import os
-            # Get the absolute path to the example file
+            # Construct the absolute path to the example file to ensure it's found correctly.
             current_dir = os.path.dirname(os.path.abspath(__file__))
             example_file_path = os.path.join(current_dir, "example", "sku_historical_data.csv")
             
             try:
-                # Load the example file with semicolon separator
+                # The example file is known to use a semicolon separator.
                 df = pd.read_csv(example_file_path, sep=';')
                 
-                # Normalize column names immediately
+                # Best practice: Normalize column names to lowercase and remove whitespace
+                # to make them easier to work with.
                 df.columns = [col.lower().strip() for col in df.columns]
                 
-                # Set session state to indicate example file is loaded
+                # Use Streamlit's session state to store the loaded dataframe and a flag.
+                # This preserves the data across user interactions (reruns).
                 st.session_state['example_loaded'] = True
                 st.session_state['df'] = df
                 
                 st.success("✅ Example file loaded successfully!")
                 
-                # Clear the uploaded_file to avoid confusion
+                # Set uploaded_file to None to ensure the app uses the example data,
+                # not a previously uploaded file.
                 uploaded_file = None
                 
             except Exception as e:
                 st.error(f"❌ Error loading example file: {str(e)}")
                 st.info(f"Attempted to load from: {example_file_path}")
-                # Reset session state
+                # If loading fails, clear any related session state to prevent issues.
                 if 'example_loaded' in st.session_state:
                     del st.session_state['example_loaded']
                 if 'df' in st.session_state:
                     del st.session_state['df']
         
-        # Initialize variables for analysis parameters
+        # --- Default Parameter Initialization ---
+        # These variables hold the default values for the analysis and warehouse configuration.
+        # They will be updated if the user changes them in the UI.
         a_cutoff = 80
         b_cutoff = 95
         deposit = 1
@@ -106,119 +127,136 @@ def main():
         c_alleys = list(range(6, 11))
         run_analysis = False
         
-        # Get dataframe either from uploaded file or session state
+        # --- Data Loading from User Upload ---
+        # This block executes if a user has uploaded a file.
         if uploaded_file is not None:
             try:
-                # First check if file is empty
+                # --- File Validation and Parsing ---
+                # Read the entire file content to check if it's empty.
+                # Decoding with 'replace' prevents errors from unusual characters.
                 file_content = uploaded_file.getvalue().decode('utf-8', errors='replace').strip()
                 if not file_content:
                     st.error("❌ Error: The uploaded file is empty.")
                     df = None
                 else:
-                    # Reset the file pointer to the beginning
+                    # The file has content, so reset the pointer to the beginning for reading.
                     uploaded_file.seek(0)
                     
-                    # Try multiple delimiters
+                    # --- Robust Delimiter Detection ---
+                    # To handle various CSV formats, we try a list of common delimiters.
                     delimiters = [',', ';', '\t', '|']
                     df = None
                     error_messages = []
                     
                     for delimiter in delimiters:
                         try:
-                            # Try with current delimiter
-                            uploaded_file.seek(0)  # Reset file pointer
+                            # Reset pointer before each read attempt.
+                            uploaded_file.seek(0)
                             temp_df = pd.read_csv(uploaded_file, sep=delimiter, engine='python')
                             
-                            # Check if we got more than one column
+                            # A valid CSV should have more than one column.
                             if len(temp_df.columns) > 1:
-                                df = temp_df
+                                df = temp_df  # Success!
                                 st.success(f"✅ File loaded successfully with '{delimiter}' delimiter")
-                                break
+                                break  # Exit the loop once a valid delimiter is found.
                             else:
                                 error_messages.append(f"Only found 1 column with '{delimiter}' delimiter")
                         except Exception as e:
                             error_messages.append(f"Failed with '{delimiter}' delimiter: {str(e)}")
                     
-                    # If all delimiters failed
+                    # --- Fallback and Final Error Handling ---
+                    # If the loop finishes and df is still None, no delimiter worked.
                     if df is None:
-                        # Try one more time with automatic delimiter detection
+                        # As a last resort, let pandas try to auto-detect the separator.
                         try:
-                            uploaded_file.seek(0)  # Reset file pointer
-                            df = pd.read_csv(uploaded_file, sep=None, engine='python')  # Let Python engine detect the separator
+                            uploaded_file.seek(0)
+                            df = pd.read_csv(uploaded_file, sep=None, engine='python')
                             st.success("✅ File loaded successfully with auto-detected delimiter")
                         except Exception as e:
-                            # If all attempts failed, show detailed error
+                            # If all attempts failed, provide a comprehensive error message.
                             error_detail = "\n".join(error_messages)
                             st.error(f"❌ Error: Could not parse the CSV file. Please check the file format.\n\nDetails:\n{error_detail}")
                             
-                            # Show a preview of the file content to help diagnose
+                            # Showing a preview of the file can help the user diagnose the issue.
                             st.error("File preview (first 200 characters):\n" + file_content[:200])
                             df = None
                 
-                # If we successfully loaded the dataframe
+                # If a dataframe was successfully loaded from the user's file...
                 if df is not None:
-                    # Normalize column names to lowercase
+                    # Normalize column names to ensure consistency (lowercase, no extra spaces).
                     df.columns = [col.lower().strip() for col in df.columns]
                     
-                    # Store in session state
+                    # Store the dataframe in the session state to persist it across reruns.
+                    # Also, explicitly set 'example_loaded' to False.
                     st.session_state['df'] = df
                     st.session_state['example_loaded'] = False
                     
-                    # Show a preview of the loaded data
+                    # Show the user a small preview of their data to confirm it loaded correctly.
                     st.write("Preview of loaded data:")
                     st.dataframe(df.head(3))
                     
             except Exception as e:
                 st.error(f"❌ Error: Unexpected error while processing file: {str(e)}")
                 df = None
+        
+        # --- Retrieve DataFrame from Session State ---
+        # If the example was loaded in a previous run, retrieve it from session state.
         elif 'example_loaded' in st.session_state and st.session_state['example_loaded'] and 'df' in st.session_state:
-            # Use the dataframe from session state if example was loaded
             df = st.session_state['df']
         else:
+            # If no file is uploaded and no example is loaded, df remains None.
             df = None
             
-        # If we have a valid dataframe, show analysis options
+        # --- Display Analysis Configuration ---
+        # This section only appears if a dataframe (df) is available.
         if df is not None:
-            # Convert column names to lowercase for case-insensitive matching
+            # --- Column Validation ---
+            # Before proceeding, ensure the required columns exist in the dataframe.
+            # We check against the lowercase versions for case-insensitivity.
             item_col_lower = item_col.lower()
             demand_col_lower = demand_col.lower()
             cost_col_lower = cost_col.lower()
             
-            # Check for required columns
+            # Create a list of required columns that are not found in the dataframe.
             missing_cols = [col for col in [item_col_lower, demand_col_lower, cost_col_lower] if col not in df.columns]
             
             if missing_cols:
+                # If any columns are missing, show an error and stop.
                 st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
                 st.write("Please ensure your CSV has these columns (case-insensitive).")
             else:
-                # Show data preview
+                # --- Configuration UI (if columns are valid) ---
                 st.write("### Data Preview")
                 st.dataframe(df.head())
                 
-                # Analysis parameters section
-                st.write("### ABC Classification Parameters")
-                a_cutoff = st.slider("Class A cutoff (%)", 0, 100, 80)
-                b_cutoff = st.slider("Class B cutoff (%)", 0, 100, 95)
+                # --- ABC Classification Parameters ---
+                st.write("### 2. ABC Classification Parameters")
+                # Sliders for the user to define the percentage cutoffs for A and B classes.
+                a_cutoff = st.slider("Class A cutoff (%): Cumulative value percentage for A items", 0, 100, 80)
+                b_cutoff = st.slider("Class B cutoff (%): Cumulative value percentage for A and B items", 0, 100, 95)
                 
-                # Warehouse location configuration
-                st.write("### Warehouse Configuration")
-                st.write("Configure warehouse locations in format d.aa.bb.ll.pp:")
+                # --- Warehouse Configuration ---
+                st.write("### 3. Warehouse Configuration")
+                st.write("Define the structure of the warehouse.")
                 
-                # Warehouse dimensions
+                # Number inputs for the user to define the physical layout of the warehouse.
                 deposit = st.number_input("Number of deposits", min_value=1, max_value=9, value=1)
                 alleys = st.number_input("Number of alleys per deposit", min_value=1, max_value=99, value=10)
                 blocks = st.number_input("Number of blocks per alley", min_value=1, max_value=99, value=10)
                 levels = st.number_input("Number of levels per block", min_value=1, max_value=99, value=4)
                 positions = st.number_input("Number of positions per level", min_value=1, max_value=99, value=10)
                 
-                # ABC slotting strategy
-                st.write("### ABC Slotting Strategy")
-                a_alleys = st.multiselect("A-class alleys", options=list(range(1, int(alleys)+1)), default=[1, 2])
-                b_alleys = st.multiselect("B-class alleys", options=list(range(1, int(alleys)+1)), default=[3, 4, 5])
-                c_alleys = st.multiselect("C-class alleys", options=list(range(1, int(alleys)+1)), default=list(range(6, int(alleys)+1)))
+                # --- ABC Slotting Strategy ---
+                st.write("### 4. ABC Slotting Strategy")
+                st.write("Assign specific alleys to each inventory class.")
+                # Multiselect widgets to let the user assign which alleys are for A, B, or C items.
+                a_alleys = st.multiselect("A-class alleys (highest value)", options=list(range(1, int(alleys)+1)), default=[1, 2])
+                b_alleys = st.multiselect("B-class alleys (medium value)", options=list(range(1, int(alleys)+1)), default=[3, 4, 5])
+                c_alleys = st.multiselect("C-class alleys (lowest value)", options=list(range(1, int(alleys)+1)), default=list(range(6, int(alleys)+1)))
                 
-                # Create a blue button using Streamlit's native functionality
-                # First add the CSS to make the button blue
+                # --- Action Button ---
+                # Use st.markdown to inject custom CSS for styling the button.
+                # This is a common trick to customize the appearance of Streamlit widgets.
                 st.markdown("""
                 <style>
                 div.stButton > button:first-child {
@@ -228,33 +266,38 @@ def main():
                 </style>
                 """, unsafe_allow_html=True)
                 
-                # Then create the button
+                # The main button that triggers the analysis. When clicked, `run_analysis` becomes True.
                 run_analysis = st.button("▶️ Run ABC Analysis", use_container_width=True)
     
-    # Main analysis section - we've already handled the data preview in the sidebar
-    # Only process if run_analysis is True and we have a valid dataframe
+    # --- Main Analysis Block ---
+    # This block runs only when the user clicks the 'Run Analysis' button and a dataframe is available.
     if run_analysis and df is not None:
-            # Convert demand and cost columns to numeric
+            # --- Data Preparation and Validation ---
             try:
-                # Make a copy of the dataframe to avoid modifying the original
+                # It's a good practice to work on a copy of the dataframe to avoid unintended side effects.
                 analysis_df = df.copy()
                 
-                # Convert columns to numeric, errors='coerce' will convert non-numeric values to NaN
+                # Convert demand and cost columns to numeric types. `errors='coerce'` is crucial as it
+                # will turn any non-numeric values (like text) into Not a Number (NaN).
                 analysis_df[demand_col_lower] = pd.to_numeric(analysis_df[demand_col_lower], errors='coerce')
                 analysis_df[cost_col_lower] = pd.to_numeric(analysis_df[cost_col_lower], errors='coerce')
                 
-                # Drop rows with NaN values after conversion
+                # Remove any rows that have NaN in the critical demand or cost columns.
                 analysis_df = analysis_df.dropna(subset=[demand_col_lower, cost_col_lower])
                 
+                # Check if any valid data remains after cleaning.
                 if len(analysis_df) == 0:
                     st.error("No valid numeric data found in the required columns. Please check your data.")
                 elif len(analysis_df) < len(df):
+                    # Inform the user if some rows were discarded.
                     st.warning(f"Some rows ({len(df) - len(analysis_df)}) were removed due to non-numeric values in the demand or cost columns.")
                 
-                # Initialize the ABC slotter
+                # --- Perform ABC Analysis ---
+                # Initialize our custom ABCSlotter class from the utils module.
                 abc_slotter = ABCSlotter()
                 
-                # Run the analysis
+                # Call the main analysis function, passing the cleaned dataframe and user-defined parameters.
+                # Note: Cutoffs are converted from percentages (e.g., 80) to decimals (e.g., 0.80).
                 result_df = abc_slotter.perform_abc_analysis(
                     analysis_df, 
                     item_column=item_col_lower,
@@ -264,139 +307,148 @@ def main():
                     b_cutoff=b_cutoff/100
                 )
                 
-                # Display results
+                # --- Display Analysis Results ---
                 st.write("### ABC Classification Results")
                 st.dataframe(result_df)
                 
-                # Display charts
-                st.write("### Pareto Analysis")
-                fig, ax = plt.subplots(figsize=(7, 4))  # Optimal size for Pareto chart visualization
+                # --- Display Pareto Chart ---
+                st.write("### Pareto Analysis (80/20 Rule)")
+                # Create a matplotlib figure to plot the Pareto chart on.
+                fig, ax = plt.subplots(figsize=(7, 4))
                 abc_slotter.plot_pareto_chart(ax)
-                plt.tight_layout()  # Adjust padding to eliminate empty space
-                st.pyplot(fig)
+                plt.tight_layout()  # Ensures the chart fits well within the figure area.
+                st.pyplot(fig)  # Display the matplotlib figure in Streamlit.
                 
-                # Display summary statistics
+                # --- Display Summary Statistics ---
                 st.write("### Summary Statistics by Class")
+                # Get a summary dataframe from the slotter and display it.
                 summary = abc_slotter.get_class_summary()
                 st.dataframe(summary)
                 
-                # Automatically assign warehouse locations
+                # --- Warehouse Location Assignment ---
                 st.write("### Warehouse Location Assignments")
                 st.write("""
-                Items have been assigned warehouse locations based on their ABC classification.
-                Locations are in the format d.aa.bb.ll.pp where:
-                - d = deposit number
-                - aa = alley number
-                - bb = block number
-                - ll = level number
-                - pp = position number
+                Items are assigned warehouse locations based on their ABC class to optimize picking routes.
+                Locations are in the format `d.aa.bb.ll.pp` (deposit.alley.block.level.position).
                 """)
-                # Create a dictionary to map ABC classes to alleys
+                # Create a dictionary to easily access the list of alleys for each class.
                 class_to_alleys = {
                     'A': a_alleys,
                     'B': b_alleys,
                     'C': c_alleys
                 }
                 
-                # Sort items by annual_value within each ABC class
-                # This ensures highest value items get the best locations
+                # Sort items first by class (A, B, C) and then by their value in descending order.
+                # This ensures that within each class, the most valuable items are processed first,
+                # allowing them to be assigned the most optimal (e.g., closest) locations.
                 result_df = result_df.sort_values(['abc_class', 'annual_value'], ascending=[True, False])
                 
-                # Create a tracking dictionary for used locations
+                # A set is used to keep track of assigned locations for fast lookups (O(1) complexity)
+                # to prevent assigning the same location to multiple items.
                 used_locations = set()
                 
-                # Function to generate a warehouse location based on ABC class and value
                 def assign_optimized_location(row, rank_within_class):
+                    """
+                    Calculates an optimized warehouse location for an item.
+
+                    This function assigns a location based on the item's ABC class and its rank
+                    (by value) within that class. The goal is to place high-value (A) items
+                    in the most accessible locations (e.g., lowest-numbered alleys, blocks, levels).
+
+                    Args:
+                        row (pd.Series): The row of the dataframe for the item.
+                        rank_within_class (int): The rank of the item within its class (0-indexed).
+
+                    Returns:
+                        str: The formatted warehouse location string (e.g., "1.01.01.01.01")
+                             or an error message if no location is available.
+                    """
                     abc_class = row['abc_class']
-                    
-                    # Get available alleys for this class
                     available_alleys = class_to_alleys.get(abc_class, [])
                     
                     if not available_alleys:
-                        return "No location available"
+                        return "No location available for this class"
                     
-                    # For A class: use lowest alley numbers first
-                    # For B and C: distribute more evenly
+                    # Strategy: For 'A' items, always start in the very first available alley.
+                    # For 'B' and 'C', distribute them across their assigned alleys.
                     if abc_class == 'A':
-                        available_alleys = sorted(available_alleys)  # Use lowest alley numbers first
+                        available_alleys = sorted(available_alleys)
                     
-                    # Calculate optimal position components based on rank within class
-                    # This ensures highest value items get most accessible locations
-                    d = 1  # Start with deposit 1 for highest value items
+                    # --- Location Calculation Algorithm ---
+                    # This algorithm translates a single rank number into a 5-part location code.
+                    d = 1  # Default deposit is 1.
                     
-                    # Cycle through available alleys
+                    # Distribute items cyclically among the available alleys for the class.
                     alley_index = rank_within_class % len(available_alleys)
                     aa = available_alleys[alley_index]
                     
-                    # Calculate block, level, position based on rank
-                    # Lower numbers = better accessibility
-                    total_positions = blocks * levels * positions
+                    # Determine the item's overall position index within its assigned alley.
+                    total_positions_per_alley = blocks * levels * positions
                     position_rank = rank_within_class // len(available_alleys)
                     
-                    if position_rank >= total_positions:
-                        # If we run out of positions in deposit 1, move to deposit 2, etc.
-                        d = (position_rank // total_positions) + 1
-                        position_rank = position_rank % total_positions
+                    # If we run out of space in deposit 1, move to the next deposit.
+                    if position_rank >= total_positions_per_alley:
+                        d = (position_rank // total_positions_per_alley) + 1
+                        position_rank = position_rank % total_positions_per_alley
                     
-                    # Calculate block, level, position
-                    # Prioritize lower blocks, then lower levels, then lower positions
+                    # Calculate block, level, and position, prioritizing lower numbers (more accessible).
                     bb = (position_rank // (levels * positions)) + 1
                     remaining = position_rank % (levels * positions)
                     ll = (remaining // positions) + 1
                     pp = (remaining % positions) + 1
                     
-                    # Format as d.aa.bb.ll.pp
+                    # Format the location code with leading zeros for consistency.
                     location = f"{d}.{aa:02d}.{bb:02d}.{ll:02d}.{pp:02d}"
                     
-                    # Check if location is already used
+                    # --- Collision Handling ---
+                    # If the calculated location is already taken (e.g., due to complex alley assignments),
+                    # find the next available spot. This is a simple linear probing approach.
                     attempts = 0
-                    while location in used_locations and attempts < 100:
-                        # Try next position
+                    while location in used_locations and attempts < 1000: # Safety break
                         pp += 1
-                        if pp > positions:
-                            pp = 1
-                            ll += 1
-                        if ll > levels:
-                            ll = 1
-                            bb += 1
-                        if bb > blocks:
+                        if pp > positions: # Next level
+                            pp = 1; ll += 1
+                        if ll > levels: # Next block
+                            ll = 1; bb += 1
+                        if bb > blocks: # Next alley
                             bb = 1
                             alley_index = (alley_index + 1) % len(available_alleys)
                             aa = available_alleys[alley_index]
-                        if alley_index == 0:  # We've cycled through all alleys
+                        if alley_index == 0 and bb == 1 and ll == 1 and pp == 1: # Cycled all alleys, move to next deposit
                             d += 1
                         
                         location = f"{d}.{aa:02d}.{bb:02d}.{ll:02d}.{pp:02d}"
                         attempts += 1
                     
-                    # If we couldn't find an unused location after many attempts
                     if location in used_locations:
-                        return "No available location"
+                        return "Collision: No available location found"
                     
-                    # Mark this location as used
-                    used_locations.add(location)
+                    used_locations.add(location) # Mark location as used
                     return location
                 
-                # Group by ABC class to get rank within each class
+                # --- Apply Location Assignment ---
+                # Create a temporary column 'rank_within_class' to store the value-based rank of each item inside its class.
                 result_df['rank_within_class'] = result_df.groupby('abc_class').cumcount()
                 
-                # Apply the function to generate locations
+                # Apply the assignment function to each row of the dataframe.
                 result_df['warehouse_location'] = result_df.apply(
                     lambda row: assign_optimized_location(row, row['rank_within_class']), 
                     axis=1
                 )
                 
-                # Drop the temporary ranking column
+                # The ranking column is no longer needed, so it's dropped.
                 result_df = result_df.drop('rank_within_class', axis=1)
                 
-                # Display the results
+                # Display the final dataframe with the new 'warehouse_location' column.
                 st.write("#### Items with Assigned Warehouse Locations")
                 st.dataframe(result_df)
                 
-                # Download section with prominent button
+                # --- Download Report ---
                 st.write("### Download Report")
-                st.write("Click below to download your ABC Slotting analysis report with warehouse locations:")
+                st.write("Click below to download the full analysis with warehouse locations as a CSV file.")
+                # Convert the final dataframe to a CSV string.
                 csv = result_df.to_csv(index=False, sep=';')
+                # Use Streamlit's download button to offer the CSV to the user.
                 st.download_button(
                     label="⬇️ Download ABC Analysis with Locations",
                     data=csv,

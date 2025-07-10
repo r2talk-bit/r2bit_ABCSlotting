@@ -1,3 +1,163 @@
+# Aplicativo de Análise de Endereçamento ABC de Inventário
+
+## O que é este aplicativo?
+
+Este é um aplicativo web amigável que ajuda gerentes de armazém e inventário a organizar seus itens de estoque de forma eficiente usando o método de classificação ABC. O aplicativo também atribui localizações ideais de armazém para cada item com base em sua importância.
+
+## O que é a Análise ABC?
+
+A análise ABC é uma técnica simples, mas poderosa, de gerenciamento de estoque que categoriza os itens em três grupos:
+
+- **Itens A**: Seus itens mais valiosos (normalmente 20% dos itens que representam 80% do valor total do seu inventário)
+- **Itens B**: Itens de valor médio (normalmente 30% dos itens que representam 15% do valor total do seu inventário)
+- **Itens C**: Itens de baixo valor (normalmente 50% dos itens que representam apenas 5% do valor total do seu inventário)
+
+Isso segue o princípio de Pareto (ou regra 80/20) que ajuda a concentrar recursos no gerenciamento dos itens mais importantes.
+
+## O que é Endereçamento de Armazém?
+
+O endereçamento de armazém é o processo de determinar a localização ideal de armazenamento para cada item em seu armazém. Este aplicativo atribui automaticamente localizações no formato `d.aa.bb.ll.pp` onde:
+
+- `d` = número do depósito
+- `aa` = número do corredor
+- `bb` = número do bloco
+- `ll` = número do nível
+- `pp` = número da posição
+
+Itens A de alto valor são colocados nas localizações mais acessíveis para coleta eficiente.
+
+## Primeiros Passos
+
+### Pré-requisitos
+
+- Python 3.7 ou superior
+- Conhecimento básico de arquivos CSV
+
+### Instalação
+
+1. **Clone este repositório** para o seu computador
+   ```
+   git clone https://github.com/r2talk-bit/r2bit_ABCSlotting.git
+   cd r2bit_ABCSlotting
+   ```
+
+2. **Configure um ambiente virtual** (recomendado, mas opcional)
+   ```
+   python -m venv venv
+   ```
+
+   - No Windows:
+     ```
+     venv\Scripts\activate
+     ```
+   - No macOS/Linux:
+     ```
+     source venv/bin/activate
+     ```
+
+3. **Instale os pacotes necessários**:
+   ```
+   pip install -r requirements.txt
+   ```
+
+### Início Rápido
+
+1. **Execute o aplicativo** usando um destes métodos:
+   - Usando o script fornecido:
+     ```
+     run.cmd  # No Windows
+     ```
+   - Usando o Streamlit diretamente:
+     ```
+     streamlit run streamlit_app.py
+     ```
+
+2. **Abra seu navegador web** - o aplicativo deve abrir automaticamente em http://localhost:8501
+
+## Como Usar o Aplicativo
+
+### Passo 1: Prepare Seus Dados
+Crie um arquivo CSV com estas três colunas (os nomes devem corresponder exatamente, não diferenciando maiúsculas de minúsculas):
+- `item_id`: Um identificador único para cada item de inventário
+- `annual_demand`: Quantas unidades são usadas/vendidas por ano
+- `unit_cost`: O custo por unidade
+
+Exemplo de formato CSV:
+```
+item_id,annual_demand,unit_cost
+SKU001,1500,10.50
+SKU002,300,45.75
+SKU003,50,120.00
+```
+
+### Passo 2: Faça Upload e Configure
+1. Faça upload do seu arquivo CSV usando o carregador de arquivos na barra lateral
+2. Defina as porcentagens de corte da classificação ABC (padrão: A=80%, B=95%)
+3. Configure as dimensões do seu armazém e a estratégia de endereçamento ABC
+
+### Passo 3: Execute a Análise
+Clique no botão "Run ABC Analysis" para:
+- Classificar itens nas categorias A, B e C
+- Calcular porcentagens de valor e estatísticas
+- Atribuir localizações ideais de armazém
+- Gerar visualizações
+
+### Passo 4: Revise os Resultados
+- Veja a tabela de resultados da classificação ABC
+- Examine o gráfico de Pareto mostrando a distribuição de valor
+- Verifique as estatísticas resumidas por classe
+- Revise as localizações de armazém atribuídas
+
+### Passo 5: Baixe os Resultados
+Clique no botão de download para obter um arquivo CSV com todos os resultados, incluindo:
+- Dados originais do item
+- Classificações ABC
+- Cálculos de valor
+- Localizações de armazém atribuídas
+
+## Estrutura do Projeto
+
+```
+r2bit_ABCSlotting/
+├── streamlit_app.py      # Código principal do aplicativo
+├── utils/
+│   └── abc_slotting.py   # Algoritmo de análise ABC
+├── requirements.txt      # Pacotes Python necessários
+├── Dockerfile            # Para containerização
+├── cloudbuild.yaml       # Para implantação no Google Cloud
+├── run.cmd               # Script de início rápido
+└── README.md             # Esta documentação
+```
+
+## Recursos
+
+- **Interface amigável** construída com Streamlit
+- **Análise automática de CSV** com suporte para separadores de vírgula e ponto-e-vírgula
+- **Visualização interativa de gráfico de Pareto**
+- **Limites de classificação ABC personalizáveis**
+- **Atribuição de localização de armazém** baseada no valor do item
+- **Estatísticas resumidas** por classe
+- **Resultados para download** em formato CSV com separadores de ponto-e-vírgula
+
+## Implantação com Docker
+
+O aplicativo pode ser containerizado e implantado em plataformas na nuvem:
+
+```bash
+# Construir imagem Docker
+docker build -t r2bitabcslotting:latest .
+
+# Executar contêiner localmente
+docker run -p 8501:8080 r2bitabcslotting:latest
+```
+
+## Precisa de Ajuda?
+
+Se você encontrar algum problema ou tiver dúvidas sobre o uso deste aplicativo, por favor, abra uma issue no repositório GitHub.
+
+----
+
+
 # ABC Inventory Slotting Analysis App
 
 ## What is this app?
@@ -157,159 +317,3 @@ If you encounter any issues or have questions about using this application, plea
 
 ----
 
-# Aplicativo de Análise de Endereçamento ABC de Inventário
-
-## O que é este aplicativo?
-
-Este é um aplicativo web amigável que ajuda gerentes de armazém e inventário a organizar seus itens de estoque de forma eficiente usando o método de classificação ABC. O aplicativo também atribui localizações ideais de armazém para cada item com base em sua importância.
-
-## O que é a Análise ABC?
-
-A análise ABC é uma técnica simples, mas poderosa, de gerenciamento de estoque que categoriza os itens em três grupos:
-
-- **Itens A**: Seus itens mais valiosos (normalmente 20% dos itens que representam 80% do valor total do seu inventário)
-- **Itens B**: Itens de valor médio (normalmente 30% dos itens que representam 15% do valor total do seu inventário)
-- **Itens C**: Itens de baixo valor (normalmente 50% dos itens que representam apenas 5% do valor total do seu inventário)
-
-Isso segue o princípio de Pareto (ou regra 80/20) que ajuda a concentrar recursos no gerenciamento dos itens mais importantes.
-
-## O que é Endereçamento de Armazém?
-
-O endereçamento de armazém é o processo de determinar a localização ideal de armazenamento para cada item em seu armazém. Este aplicativo atribui automaticamente localizações no formato `d.aa.bb.ll.pp` onde:
-
-- `d` = número do depósito
-- `aa` = número do corredor
-- `bb` = número do bloco
-- `ll` = número do nível
-- `pp` = número da posição
-
-Itens A de alto valor são colocados nas localizações mais acessíveis para coleta eficiente.
-
-## Primeiros Passos
-
-### Pré-requisitos
-
-- Python 3.7 ou superior
-- Conhecimento básico de arquivos CSV
-
-### Instalação
-
-1. **Clone este repositório** para o seu computador
-   ```
-   git clone https://github.com/r2talk-bit/r2bit_ABCSlotting.git
-   cd r2bit_ABCSlotting
-   ```
-
-2. **Configure um ambiente virtual** (recomendado, mas opcional)
-   ```
-   python -m venv venv
-   ```
-
-   - No Windows:
-     ```
-     venv\Scripts\activate
-     ```
-   - No macOS/Linux:
-     ```
-     source venv/bin/activate
-     ```
-
-3. **Instale os pacotes necessários**:
-   ```
-   pip install -r requirements.txt
-   ```
-
-### Início Rápido
-
-1. **Execute o aplicativo** usando um destes métodos:
-   - Usando o script fornecido:
-     ```
-     run.cmd  # No Windows
-     ```
-   - Usando o Streamlit diretamente:
-     ```
-     streamlit run streamlit_app.py
-     ```
-
-2. **Abra seu navegador web** - o aplicativo deve abrir automaticamente em http://localhost:8501
-
-## Como Usar o Aplicativo
-
-### Passo 1: Prepare Seus Dados
-Crie um arquivo CSV com estas três colunas (os nomes devem corresponder exatamente, não diferenciando maiúsculas de minúsculas):
-- `item_id`: Um identificador único para cada item de inventário
-- `annual_demand`: Quantas unidades são usadas/vendidas por ano
-- `unit_cost`: O custo por unidade
-
-Exemplo de formato CSV:
-```
-item_id,annual_demand,unit_cost
-SKU001,1500,10.50
-SKU002,300,45.75
-SKU003,50,120.00
-```
-
-### Passo 2: Faça Upload e Configure
-1. Faça upload do seu arquivo CSV usando o carregador de arquivos na barra lateral
-2. Defina as porcentagens de corte da classificação ABC (padrão: A=80%, B=95%)
-3. Configure as dimensões do seu armazém e a estratégia de endereçamento ABC
-
-### Passo 3: Execute a Análise
-Clique no botão "Run ABC Analysis" para:
-- Classificar itens nas categorias A, B e C
-- Calcular porcentagens de valor e estatísticas
-- Atribuir localizações ideais de armazém
-- Gerar visualizações
-
-### Passo 4: Revise os Resultados
-- Veja a tabela de resultados da classificação ABC
-- Examine o gráfico de Pareto mostrando a distribuição de valor
-- Verifique as estatísticas resumidas por classe
-- Revise as localizações de armazém atribuídas
-
-### Passo 5: Baixe os Resultados
-Clique no botão de download para obter um arquivo CSV com todos os resultados, incluindo:
-- Dados originais do item
-- Classificações ABC
-- Cálculos de valor
-- Localizações de armazém atribuídas
-
-## Estrutura do Projeto
-
-```
-r2bit_ABCSlotting/
-├── streamlit_app.py      # Código principal do aplicativo
-├── utils/
-│   └── abc_slotting.py   # Algoritmo de análise ABC
-├── requirements.txt      # Pacotes Python necessários
-├── Dockerfile            # Para containerização
-├── cloudbuild.yaml       # Para implantação no Google Cloud
-├── run.cmd               # Script de início rápido
-└── README.md             # Esta documentação
-```
-
-## Recursos
-
-- **Interface amigável** construída com Streamlit
-- **Análise automática de CSV** com suporte para separadores de vírgula e ponto-e-vírgula
-- **Visualização interativa de gráfico de Pareto**
-- **Limites de classificação ABC personalizáveis**
-- **Atribuição de localização de armazém** baseada no valor do item
-- **Estatísticas resumidas** por classe
-- **Resultados para download** em formato CSV com separadores de ponto-e-vírgula
-
-## Implantação com Docker
-
-O aplicativo pode ser containerizado e implantado em plataformas na nuvem:
-
-```bash
-# Construir imagem Docker
-docker build -t r2bitabcslotting:latest .
-
-# Executar contêiner localmente
-docker run -p 8501:8080 r2bitabcslotting:latest
-```
-
-## Precisa de Ajuda?
-
-Se você encontrar algum problema ou tiver dúvidas sobre o uso deste aplicativo, por favor, abra uma issue no repositório GitHub.

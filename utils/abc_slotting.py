@@ -7,67 +7,62 @@ class ABCSlotter:
     """
     A class to perform ABC inventory slotting analysis.
     
-    ABC analysis is a method of categorizing inventory items based on their value or importance:
-    - A items: High value/importance (typically top 80% of value)
-    - B items: Medium value/importance (typically next 15% of value)
-    - C items: Low value/importance (typically last 5% of value)
+    This class encapsulates the logic for calculating ABC classes for inventory items,
+    generating a Pareto chart, and providing summary statistics.
     """
     
     def __init__(self):
-        self.result_df = None
-        self.cumulative_percentage = None
-        self.value_percentage = None
-        self.item_percentage = None
+        """Initializes the ABCSlotter, setting up placeholder attributes."""
+        # --- Instance Variables ---
+        # These will be populated after the analysis is run.
+        self.result_df = None  # The dataframe with the full analysis results.
+        self.cumulative_percentage = None  # Array of cumulative value percentages for plotting.
+        self.value_percentage = None  # Array of individual item value percentages for plotting.
+        self.item_percentage = None  # Array of cumulative item percentages for plotting.
     
     def perform_abc_analysis(self, df, item_column, demand_column, cost_column, 
                             a_cutoff=0.8, b_cutoff=0.95):
         """
-        Perform ABC analysis on the provided dataframe.
-        
-        Parameters:
-        -----------
-        df : pandas.DataFrame
-            Input dataframe with inventory data
-        item_column : str
-            Name of the column containing item identifiers
-        demand_column : str
-            Name of the column containing annual demand/usage
-        cost_column : str
-            Name of the column containing unit cost
-        a_cutoff : float, optional (default=0.8)
-            Cutoff percentage for Class A items (0.8 = 80%)
-        b_cutoff : float, optional (default=0.95)
-            Cutoff percentage for Class B items (0.95 = 95%)
-            
-        Returns:
-        --------
-        pandas.DataFrame
-            Original dataframe with added ABC classification columns
+        Performs the core ABC analysis on the provided dataframe.
+
+        This method calculates the annual value of each item, sorts them, computes
+        cumulative value percentages, and assigns an ABC class based on the defined cutoffs.
         """
-        # Create a copy of the dataframe to avoid modifying the original
+        # --- 1. Data Preparation ---
+        # Create a copy to avoid modifying the original dataframe passed to the function.
         result_df = df.copy()
         
-        # Calculate annual value (demand * cost)
+        # Calculate the total annual value for each item (demand * cost).
+        # This is the primary metric for ranking items.
         result_df['annual_value'] = result_df[demand_column] * result_df[cost_column]
         
-        # Sort by annual value in descending order
+        # Sort items by their annual value in descending order (most valuable first).
+        # `reset_index(drop=True)` creates a clean new index for the sorted dataframe.
         result_df = result_df.sort_values('annual_value', ascending=False).reset_index(drop=True)
         
-        # Calculate cumulative value and percentages
+        # --- 2. Percentage Calculations ---
+        # Calculate the total value of all items combined.
         total_value = result_df['annual_value'].sum()
+        # Calculate the percentage of total value that each individual item represents.
         result_df['value_percentage'] = result_df['annual_value'] / total_value
+        # Calculate the cumulative sum of the value percentage. This is key for the ABC classification.
         result_df['cumulative_value_percentage'] = result_df['value_percentage'].cumsum()
         
-        # Calculate item percentages
+        # Calculate the cumulative percentage of items.
         total_items = len(result_df)
+        # The item's rank (index + 1) divided by the total number of items.
         result_df['item_percentage'] = (result_df.index + 1) / total_items
         
-        # Assign ABC classes
+        # --- 3. ABC Classification ---
+        # Start by assigning all items to the lowest class, 'C'.
         result_df['abc_class'] = 'C'
+        # Reclassify items as 'B' if their cumulative value is within the B cutoff.
         result_df.loc[result_df['cumulative_value_percentage'] <= b_cutoff, 'abc_class'] = 'B'
+        # Reclassify items as 'A' if their cumulative value is within the A cutoff. This overwrites 'B' for the top items.
         result_df.loc[result_df['cumulative_value_percentage'] <= a_cutoff, 'abc_class'] = 'A'
         
-        # Store results for plotting
+        # --- 4. Store Results ---
+        # Store the results and key data series as instance variables for later use in plotting and summaries.
         self.result_df = result_df
         self.cumulative_percentage = result_df['cumulative_value_percentage'].values
         self.item_percentage = result_df['item_percentage'].values
@@ -77,86 +72,103 @@ class ABCSlotter:
     
     def plot_pareto_chart(self, ax=None):
         """
-        Plot a Pareto chart showing the ABC analysis results.
-        
-        Parameters:
-        -----------
-        ax : matplotlib.axes.Axes, optional
-            Axes object to plot on. If None, a new figure and axes will be created.
-            
-        Returns:
-        --------
-        matplotlib.axes.Axes
-            The axes containing the plot
+        Plots a Pareto chart showing the ABC analysis results.
+
+        A Pareto chart visually represents the 80/20 rule, showing the value
+        contribution of items as bars and the cumulative contribution as a line.
         """
+        # Ensure that the analysis has been run before trying to plot.
         if self.result_df is None:
             raise ValueError("No analysis results available. Run perform_abc_analysis first.")
             
+        # If no matplotlib axes are provided, create a new figure and axes.
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Plot the value percentage as bars
-        ax.bar(self.item_percentage, self.value_percentage, color='skyblue', alpha=0.7)
+        # --- Plotting --- 
+        # Plot the individual item value percentages as bars.
+        ax.bar(self.item_percentage, self.value_percentage, color='skyblue', alpha=0.7, label='Item Value %')
         
-        # Plot the cumulative percentage as a line
+        # Create a second y-axis that shares the same x-axis for the cumulative line.
         ax2 = ax.twinx()
+        # Plot the cumulative value percentage as a line chart on the second y-axis.
         ax2.plot(self.item_percentage, self.cumulative_percentage, color='red', marker='o', 
-                 linestyle='-', linewidth=2, markersize=4)
+                 linestyle='-', linewidth=2, markersize=4, label='Cumulative Value %')
         
-        # Add reference lines for A, B, C cutoffs
-        a_items = self.result_df[self.result_df['abc_class'] == 'A']['item_percentage'].max()
-        b_items = self.result_df[self.result_df['abc_class'] == 'B']['item_percentage'].max()
+        # --- Reference Lines --- 
+        # Find the point where the last 'A' item and 'B' item fall on the x-axis.
+        a_items_cutoff = self.result_df[self.result_df['abc_class'] == 'A']['item_percentage'].max()
+        b_items_cutoff = self.result_df[self.result_df['abc_class'] == 'B']['item_percentage'].max()
         
-        if not pd.isna(a_items):
-            ax.axvline(x=a_items, color='green', linestyle='--', alpha=0.7)
-            ax.text(a_items + 0.01, 0.01, 'A', fontsize=12, color='green')
+        # --- Class Labels ---
+        # Dynamically position text labels for each class within the plot area.
+        y_pos_max = ax.get_ylim()[1] # Get the top of the y-axis for relative positioning.
+
+        # Draw a vertical line and place text for Class A.
+        if not pd.isna(a_items_cutoff):
+            ax.axvline(x=a_items_cutoff, color='green', linestyle='--', alpha=0.7)
+            # Position text in the middle of the 'A' section.
+            ax.text(a_items_cutoff / 2, y_pos_max * 0.8, 'Class A', fontsize=12, color='green', ha='center')
         
-        if not pd.isna(b_items):
-            ax.axvline(x=b_items, color='orange', linestyle='--', alpha=0.7)
-            ax.text(b_items + 0.01, 0.01, 'B', fontsize=12, color='orange')
+        # Draw a vertical line and place text for Class B.
+        if not pd.isna(b_items_cutoff):
+            ax.axvline(x=b_items_cutoff, color='orange', linestyle='--', alpha=0.7)
+            # Position text in the middle of the 'B' section.
+            ax.text(a_items_cutoff + (b_items_cutoff - a_items_cutoff) / 2, y_pos_max * 0.6, 'Class B', fontsize=12, color='orange', ha='center')
+
+        # Place text for Class C in the middle of its section.
+        ax.text(b_items_cutoff + (1 - b_items_cutoff) / 2, y_pos_max * 0.4, 'Class C', fontsize=12, color='gray', ha='center')
         
-        # Set labels and title
-        ax.set_xlabel('Percentage of Items')
-        ax.set_ylabel('Value Percentage')
-        ax2.set_ylabel('Cumulative Value Percentage')
+        # --- Formatting --- 
+        ax.set_xlabel('Cumulative Percentage of Items')
+        ax.set_ylabel('Percentage of Total Value (by Item)')
+        ax2.set_ylabel('Cumulative Percentage of Total Value')
         ax.set_title('ABC Analysis Pareto Chart')
         
-        # Set y-axis limits
+        # Set y-axis limits to make the chart readable.
         ax.set_ylim(0, max(self.value_percentage) * 1.1)
         ax2.set_ylim(0, 1.05)
         
-        # Add grid
+        # Add a grid for better readability.
         ax.grid(True, alpha=0.3)
         
         return ax
     
     def get_class_summary(self):
         """
-        Get summary statistics for each ABC class.
-        
-        Returns:
-        --------
-        pandas.DataFrame
-            Summary statistics by ABC class
+        Calculates and returns summary statistics for each ABC class.
+
+        This includes the number of items, percentage of total items, total value,
+        and percentage of total value for each class.
         """
+        # Ensure analysis has been run.
         if self.result_df is None:
             raise ValueError("No analysis results available. Run perform_abc_analysis first.")
         
-        # Group by ABC class and calculate statistics
+        # --- Aggregation ---
+        # Group the results by 'abc_class' and calculate key metrics for each group.
+        # .agg() allows calculating multiple statistics at once.
         summary = self.result_df.groupby('abc_class').agg(
-            item_count=('abc_class', 'count'),
-            total_value=('annual_value', 'sum'),
+            item_count=('abc_class', 'count'),  # Count the number of items in each class.
+            total_value=('annual_value', 'sum'),  # Sum the total value of items in each class.
         ).reset_index()
         
-        # Calculate percentages
+        # --- Percentage Calculation ---
+        # Calculate the grand totals needed for percentage calculations.
         total_items = len(self.result_df)
         total_value = self.result_df['annual_value'].sum()
         
-        summary['item_percentage'] = summary['item_count'] / total_items * 100
-        summary['value_percentage'] = summary['total_value'] / total_value * 100
+        # Calculate the percentage of total items and total value for each class.
+        summary['item_percentage'] = (summary['item_count'] / total_items) * 100
+        summary['value_percentage'] = (summary['total_value'] / total_value) * 100
         
-        # Reorder columns
+        # --- Formatting ---
+        # Reorder columns for a more logical presentation.
         summary = summary[['abc_class', 'item_count', 'item_percentage', 
                           'total_value', 'value_percentage']]
         
+        # Ensure the classes are sorted in A, B, C order.
+        summary['abc_class'] = pd.Categorical(summary['abc_class'], ['A', 'B', 'C'])
+        summary = summary.sort_values('abc_class')
+
         return summary
